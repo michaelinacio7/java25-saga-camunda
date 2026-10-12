@@ -29,6 +29,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - name: Configure Elasticsearch host prerequisites
+        run: sudo sysctl -w vm.max_map_count=262144
       - name: Run against real Camunda 8 server
         run: bash scripts/e2e.sh
       - name: Show application and Camunda logs on failure

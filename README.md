@@ -1,43 +1,65 @@
-# Order Saga with Camunda 8 (Java)
+# Order Saga with Camunda 8 (Java 25)
 
-Projeto de estudo de Saga por orquestração visual com BPMN 2.0 e workers Spring Boot.
+Projeto independente para demonstrar uma Saga orquestrada por BPMN 2.0 com workers Spring Boot. Todas as operações de negócio são simuladas: não há cobrança real.
 
-## Fluxo BPMN
+## Fluxo
 
-Reserva de estoque -> cobrança simulada -> reserva de entrega. O modelo contém um caminho de compensação para estorno e liberação do estoque quando a etapa de entrega dispara o erro BPMN configurado. O modelo está em `src/main/resources/processes/order-saga.bpmn`.
+1. Reservar estoque.
+2. Simular cobrança.
+3. Reservar entrega.
+4. Se a entrega falhar, o evento de erro BPMN inicia a compensação: estornar pagamento e liberar estoque.
 
 ## Requisitos
 
 - JDK 25
 - Maven 3.9+
-- Camunda 8 self-managed acessível por REST/gRPC
-- Camunda Modeler (opcional, para visualizar o BPMN)
+- Docker Desktop com Docker Compose
 
-## Configuração
+## Executar localmente
 
-Defina `CAMUNDA_GRPC_ADDRESS` e `CAMUNDA_REST_ADDRESS`. A configuração padrão usa endpoints locais sem autenticação, adequada apenas para desenvolvimento local isolado. Para cluster remoto, configure autenticação e TLS e nunca armazene segredos no Git.
-
-## Workers
-
-Os workers em `OrderWorkers` são stubs de sandbox. Não movimentam dinheiro nem integram com estoque/transportadora reais. Cada integração real deverá usar chave de idempotência, timeouts, retries e compensação segura.
-
-## Executar
+Terminal 1 — iniciar o Camunda 8 local:
 
 ```bash
-mvn test
+docker compose up -d
+```
+
+Terminal 2 — iniciar a API e os workers:
+
+```bash
 mvn spring-boot:run
 ```
 
-O processo BPMN precisa ser publicado no cluster Camunda antes de iniciar instâncias. A implantação automática do BPMN e os testes com Camunda Process Test ainda não estão configurados.
+Na inicialização, a aplicação publica automaticamente `processes/order-saga.bpmn`. A API fica em http://localhost:8081 se executar com a configuração abaixo, ou na porta configurada em `server.port`.
 
-## Limitações atuais
+## Criar pedido de teste
 
-- Não há endpoint REST para iniciar o processo.
-- Os workers retornam resultados simulados.
-- A conexão padrão não usa autenticação e deve ficar restrita ao ambiente local.
-- O caminho de compensação BPMN precisa ser exercitado com um worker que lance explicitamente o erro de negócio esperado.
-- O build ainda precisa ser executado no CI.
+Sucesso:
+
+```bash
+curl -X POST http://localhost:8081/api/orders -H "Content-Type: application/json" -d '{"orderId":"pedido-200","customerId":"cliente-1","sku":"CAMISETA-1","quantity":1,"amount":49.90,"currency":"BRL"}'
+```
+
+Falha simulada na entrega — deve executar estorno e liberação de estoque:
+
+```bash
+curl -X POST http://localhost:8081/api/orders -H "Content-Type: application/json" -d '{"orderId":"pedido-201","customerId":"cliente-1","sku":"FAIL_DELIVERY","quantity":1,"amount":49.90,"currency":"BRL"}'
+```
+
+## Testes
+
+```bash
+mvn --batch-mode verify
+```
+
+O teste automatizado verifica que o BPMN está no classpath, é XML válido e contém os tipos de job e o evento de erro usados pela Saga. O teste não substitui um teste de integração contra um cluster Camunda real.
+
+## Configuração e segurança
+
+O `application.yaml` usa endpoints locais sem autenticação, somente para desenvolvimento isolado. Para clusters remotos, configure autenticação e TLS e nunca armazene segredos no Git. A configuração Docker Compose é para avaliação local, não produção.
+
+Cada worker é um adapter de demonstração. Em integrações reais, use chaves de idempotência, retries/timeouts apropriados, logs estruturados e compensações seguras.
 
 Referências:
 - [Camunda Spring Boot Starter](https://docs.camunda.io/docs/apis-tools/camunda-spring-boot-starter/getting-started/)
-- [Camunda 8 APIs](https://docs.camunda.io/docs/apis-tools/working-with-apis-tools/)
+- [Camunda Java Client](https://docs.camunda.io/docs/apis-tools/java-client/getting-started/)
+- [Camunda Docker Compose quickstart](https://docs.camunda.io/docs/self-managed/quickstart/developer-quickstart/docker-compose/)

@@ -1,6 +1,6 @@
 package com.michaelinacio.saga.camunda;
 
-import io.camunda.spring.client.annotation.JobWorker;
+import io.camunda.client.annotation.JobWorker;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;

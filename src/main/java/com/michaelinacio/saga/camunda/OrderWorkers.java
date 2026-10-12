@@ -1,6 +1,8 @@
 package com.michaelinacio.saga.camunda;
 
 import io.camunda.client.annotation.JobWorker;
+import io.camunda.client.api.response.ActivatedJob;
+import io.camunda.client.api.worker.JobClient;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -9,7 +11,6 @@ import java.util.Map;
 public class OrderWorkers {
     @JobWorker(type = "reserve-inventory")
     public Map<String, Object> reserveInventory(Map<String, Object> variables) {
-        // Replace with an idempotent inventory adapter; use orderId as its deduplication key.
         return Map.of("inventoryReserved", true);
     }
 
@@ -20,7 +21,7 @@ public class OrderWorkers {
 
     @JobWorker(type = "charge-payment")
     public Map<String, Object> chargePayment(Map<String, Object> variables) {
-        // Sandbox only: no real payment provider is called.
+        // Sandbox only: no payment provider is called.
         return Map.of("paymentCharged", true);
     }
 
@@ -29,13 +30,21 @@ public class OrderWorkers {
         return Map.of("paymentCompensated", true);
     }
 
-    @JobWorker(type = "reserve-delivery")
-    public Map<String, Object> reserveDelivery(Map<String, Object> variables) {
-        return Map.of("deliveryReserved", true);
-    }
+    @JobWorker(type = "reserve-delivery", autoComplete = false)
+    public void reserveDelivery(ActivatedJob job, JobClient client) {
+        Map<String, Object> variables = job.getVariablesAsMap();
+        if (Boolean.TRUE.equals(variables.get("failDelivery"))) {
+            client.newThrowErrorCommand(job)
+                    .errorCode("ORDER_STEP_FAILED")
+                    .errorMessage("Simulated delivery reservation failure")
+                    .send()
+                    .join();
+            return;
+        }
 
-    @JobWorker(type = "cancel-delivery")
-    public Map<String, Object> cancelDelivery(Map<String, Object> variables) {
-        return Map.of("deliveryCompensated", true);
+        client.newCompleteCommand(job)
+                .variables(Map.of("deliveryReserved", true))
+                .send()
+                .join();
     }
 }

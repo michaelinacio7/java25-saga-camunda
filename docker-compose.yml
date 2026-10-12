@@ -1,8 +1,31 @@
 services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
   camunda:
     image: camunda/camunda:8.10.0
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
     environment:
       CAMUNDA_SECURITY_AUTHENTICATION_UNPROTECTEDAPI: "true"
+      CAMUNDA_DATA_SECONDARYSTORAGE_TYPE: elasticsearch
+      CAMUNDA_DATA_SECONDARYSTORAGE_ELASTICSEARCH_URL: http://elasticsearch:9200
     ports:
       - "8080:8080"
       - "26500:26500"
